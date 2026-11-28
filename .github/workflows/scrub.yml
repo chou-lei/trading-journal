@@ -1,0 +1,30 @@
+name: Publish encrypted site (orphan, scrubs history)
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  publish:
+    if: ${{ !startsWith(github.event.head_commit.message, 'Publish') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Rebuild main and gh-pages as single orphan commits with only the encrypted build
+        run: |
+          set -e
+          test -f site/index.html || { echo "no site/ dir, nothing to do"; exit 0; }
+          cp -r site /tmp/site && cp -r .github /tmp/gh
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -q --orphan clean
+          git rm -rfq . && git clean -fdxq
+          cp -r /tmp/site/. . && touch .nojekyll
+          printf '# trading-journal\n\nEncrypted static build only. Data is AES-GCM encrypted; the site requires a password.\n' > README.md
+          git add -A && git commit -qm "Publish encrypted build"
+          git push -f origin HEAD:gh-pages
+          git checkout -q --orphan clean-main
+          cp -r /tmp/gh .github && git add -A && git commit -qm "Publish encrypted build"
+          git push -f origin HEAD:main
